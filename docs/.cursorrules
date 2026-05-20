@@ -1,0 +1,15 @@
+# Context Pack Document References (Pointer)
+
+The authoritative Cursor rules file is at the repository root:
+
+- [/.cursorrules](../.cursorrules)
+
+The mandatory `/docs` context pack referenced by it:
+
+- [architecture.md](architecture.md) — System architecture and design patterns
+- [structure.md](structure.md) — Project organization and folder structure
+- [code.md](code.md) — Code patterns and conventions
+- [dataflow.md](dataflow.md) — Data flow and system boundaries
+- [decisions.md](decisions.md) — Architectural decisions and rationale
+- [glossary.md](glossary.md) — Domain terminology and definitions
+- [risk.md](risk.md) — Security and risk management
