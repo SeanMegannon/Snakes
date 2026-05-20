@@ -1,0 +1,228 @@
+import tkinter as tk
+import random
+
+# Constants
+WINDOW_WIDTH = 600
+WINDOW_HEIGHT = 600
+GRID_SIZE = 20
+GRID_WIDTH = WINDOW_WIDTH // GRID_SIZE
+GRID_HEIGHT = WINDOW_HEIGHT // GRID_SIZE
+GAME_SPEED = 150  # milliseconds
+
+# Mine colors and timing
+MINE_COLOR_A = '#FF0000'
+MINE_COLOR_B = '#C8C8C8'
+MINE_FLASH_INTERVAL = 200   # milliseconds
+
+# Snake color palette (bright colors visible on dark backgrounds)
+SNAKE_COLORS = [
+    '#0064FF',      # Bright Blue
+    '#00FFFF',      # Cyan
+    '#32FF32',      # Lime Green
+    '#FFFF00',      # Yellow
+    '#FFA500',      # Orange
+    '#FF3232',      # Red
+    '#FF00FF',      # Magenta
+    '#FF69B4',      # Hot Pink
+]
+
+# Directions
+UP = (0, -1)
+DOWN = (0, 1)
+LEFT = (-1, 0)
+RIGHT = (1, 0)
+
+class SnakeGame:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Snake Game")
+        self.root.resizable(False, False)
+        
+        # Create canvas
+        self.canvas = tk.Canvas(root, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, bg='black')
+        self.canvas.pack()
+        
+        # Score label
+        self.score_label = tk.Label(root, text="Score: 0", font=("Arial", 16), bg='black', fg='white')
+        self.score_label.place(x=10, y=10)
+        
+        # Game state
+        self.reset_game()
+        
+        # Key bindings
+        self.root.bind('<Up>', lambda e: self.change_direction(UP))
+        self.root.bind('<Down>', lambda e: self.change_direction(DOWN))
+        self.root.bind('<Left>', lambda e: self.change_direction(LEFT))
+        self.root.bind('<Right>', lambda e: self.change_direction(RIGHT))
+        self.root.bind('<space>', lambda e: self.restart_game() if self.game_over else None)
+        self.root.bind('<Escape>', lambda e: self.root.quit())
+        
+        # Start game loop
+        self.game_loop()
+    
+    def reset_game(self):
+        self.snake = [(GRID_WIDTH // 2, GRID_HEIGHT // 2)]
+        self.direction = RIGHT
+        self.next_direction = RIGHT
+        self.food = self.generate_food()
+        self.score = 0
+        self.game_over = False
+        self.color_index = 0  # Track current color
+        self.score_label.config(text=f"Score: {self.score}")
+        self.mines = []
+        self.mine_flash_state = False
+        if hasattr(self, '_flash_after_id'):
+            self.root.after_cancel(self._flash_after_id)
+        self._flash_after_id = self.root.after(MINE_FLASH_INTERVAL, self._toggle_mine_flash)
+    
+    def generate_food(self):
+        while True:
+            pos = (random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1))
+            if pos not in self.snake:
+                return pos
+    
+    def change_direction(self, new_direction):
+        # Prevent reversing direction
+        if (new_direction[0] * -1, new_direction[1] * -1) != self.direction:
+            self.next_direction = new_direction
+    
+    def move_snake(self):
+        self.direction = self.next_direction
+        head_x, head_y = self.snake[0]
+        dir_x, dir_y = self.direction
+        new_head = (head_x + dir_x, head_y + dir_y)
+        
+        # Check wall collision
+        if (new_head[0] < 0 or new_head[0] >= GRID_WIDTH or 
+            new_head[1] < 0 or new_head[1] >= GRID_HEIGHT):
+            return True
+        
+        # Check self collision
+        if new_head in self.snake:
+            return True
+        
+        self.snake.insert(0, new_head)
+        
+        # Check food consumption
+        if new_head == self.food:
+            self.score += 1
+            self.color_index = (self.color_index + 1) % len(SNAKE_COLORS)
+            self.score_label.config(text=f"Score: {self.score}")
+            self.food = self.generate_food()
+            self._try_spawn_mine()
+        else:
+            self.snake.pop()
+
+        # Mine collision check
+        if new_head in self.mines:
+            self.mines.remove(new_head)
+            shrink = min(3, len(self.snake))
+            del self.snake[-shrink:]
+            self.score = max(0, self.score - 3)
+            self.score_label.config(text=f"Score: {self.score}")
+            if len(self.snake) == 0:
+                return True
+        
+        return False
+    
+    def draw(self):
+        self.canvas.delete('all')
+        
+        # Draw grid
+        for x in range(0, WINDOW_WIDTH, GRID_SIZE):
+            self.canvas.create_line(x, 0, x, WINDOW_HEIGHT, fill='#282828')
+        for y in range(0, WINDOW_HEIGHT, GRID_SIZE):
+            self.canvas.create_line(0, y, WINDOW_WIDTH, y, fill='#282828')
+        
+        # Draw mines
+        mine_color = MINE_COLOR_A if self.mine_flash_state else MINE_COLOR_B
+        for mx, my in self.mines:
+            x1 = mx * GRID_SIZE
+            y1 = my * GRID_SIZE
+            self.canvas.create_rectangle(x1, y1, x1 + GRID_SIZE, y1 + GRID_SIZE,
+                                          fill=mine_color, outline='')
+
+        # Draw snake with current color
+        current_color = SNAKE_COLORS[self.color_index]
+        for segment in self.snake:
+            x1 = segment[0] * GRID_SIZE
+            y1 = segment[1] * GRID_SIZE
+            x2 = x1 + GRID_SIZE
+            y2 = y1 + GRID_SIZE
+            self.canvas.create_rectangle(x1, y1, x2, y2, fill=current_color, outline='')
+        
+        # Draw food (ALWAYS GREEN per .cursorrules)
+        x1 = self.food[0] * GRID_SIZE
+        y1 = self.food[1] * GRID_SIZE
+        x2 = x1 + GRID_SIZE
+        y2 = y1 + GRID_SIZE
+        self.canvas.create_rectangle(x1, y1, x2, y2, fill='green', outline='dark green')
+        
+        # Draw game over screen
+        if self.game_over:
+            self.canvas.create_rectangle(100, 200, 500, 400, fill='black', outline='white', width=3)
+            self.canvas.create_text(300, 250, text='Game Over!', 
+                                   font=('Arial', 36, 'bold'), fill='white')
+            self.canvas.create_text(300, 300, text=f'Final Score: {self.score}', 
+                                   font=('Arial', 24), fill='white')
+            self.canvas.create_text(300, 350, text='Press SPACE to restart or ESC to quit', 
+                                   font=('Arial', 14), fill='white')
+    
+    def game_loop(self):
+        if not self.game_over:
+            collision = self.move_snake()
+            if collision:
+                self.game_over = True
+        
+        self.draw()
+        self.root.after(GAME_SPEED, self.game_loop)
+    
+    def restart_game(self):
+        self.reset_game()
+
+    def _toggle_mine_flash(self):
+        self.mine_flash_state = not self.mine_flash_state
+        self._flash_after_id = self.root.after(MINE_FLASH_INTERVAL, self._toggle_mine_flash)
+
+    def _try_spawn_mine(self):
+        expected_count = 1 + self.score // 5
+        mines_to_add = expected_count - len(self.mines)
+        if mines_to_add <= 0:
+            return
+        for _ in range(mines_to_add):
+            for attempts in range(1000):
+                cx = random.randint(0, GRID_WIDTH - 1)
+                cy = random.randint(0, GRID_HEIGHT - 1)
+                candidate = (cx, cy)
+                if candidate in self.snake:
+                    continue
+                if any(abs(cx - sx) + abs(cy - sy) <= 10 for sx, sy in self.snake):
+                    continue
+                hx, hy = self.snake[0]
+                dx, dy = self.direction
+                path = set()
+                px, py = hx + dx, hy + dy
+                while 0 <= px < GRID_WIDTH and 0 <= py < GRID_HEIGHT:
+                    path.add((px, py))
+                    px += dx
+                    py += dy
+                if candidate in path:
+                    continue
+                if candidate == self.food:
+                    continue
+                if candidate in self.mines:
+                    continue
+                self.mines.append(candidate)
+                break
+            # silently skip if 1000 attempts exhausted
+
+def main():
+    root = tk.Tk()
+    game = SnakeGame(root)
+    root.mainloop()
+
+if __name__ == '__main__':
+    main()
+
+
+
